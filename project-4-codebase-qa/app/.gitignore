@@ -1,0 +1,5 @@
+.env
+vector_store.json
+__pycache__/
+.pytest_cache/
+*.pyc

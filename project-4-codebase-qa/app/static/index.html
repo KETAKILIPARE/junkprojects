@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Codebase Q&A</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: #0f172a; color: #f1f5f9; min-height: 100vh; padding: 2rem; }
+    h1 { font-size: 1.5rem; margin-bottom: 1.5rem; }
+    .card { background: #1e293b; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    input, textarea { width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #f1f5f9; font-size: 0.95rem; margin-top: 0.5rem; }
+    button { margin-top: 0.75rem; padding: 0.6rem 1.2rem; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 0.95rem; }
+    pre { background: #0f172a; padding: 1rem; border-radius: 8px; white-space: pre-wrap; font-size: 0.85rem; margin-top: 0.75rem; color: #94a3b8; }
+    label { font-size: 0.9rem; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Codebase Q&A Assistant</h1>
+
+  <div class="card">
+    <label>Index a folder</label>
+    <input id="folderPath" placeholder="/path/to/your/project" />
+    <button onclick="indexFolder()">Index</button>
+    <pre id="indexResult"></pre>
+  </div>
+
+  <div class="card">
+    <label>Ask a question</label>
+    <textarea id="question" rows="3" placeholder="How does authentication work?"></textarea>
+    <button onclick="askQuestion()">Ask</button>
+    <pre id="answer"></pre>
+  </div>
+
+  <script>
+    async function indexFolder() {
+      const path = document.getElementById('folderPath').value
+      const res = await fetch('/index', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ path }) })
+      document.getElementById('indexResult').textContent = JSON.stringify(await res.json(), null, 2)
+    }
+    async function askQuestion() {
+      const question = document.getElementById('question').value
+      const res = await fetch('/query', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ question }) })
+      const data = await res.json()
+      document.getElementById('answer').textContent = data.answer + '\n\nSources:\n' + JSON.stringify(data.sources, null, 2)
+    }
+  </script>
+</body>
+</html>
