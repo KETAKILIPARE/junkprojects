@@ -1,0 +1,87 @@
+services:
+
+  # ── Shared PostgreSQL ─────────────────────────────────────────
+  postgres:
+    image: postgres:16
+    container_name: bubu-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 5
+
+  # ── Project 1: Cloud Resource Platform ───────────────────────
+  cloud-resource:
+    build: ./project-1-cloud-resource/backend
+    container_name: cloud-resource-backend
+    ports:
+      - "8081:8081"
+    environment:
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: local-dev-secret-key-minimum-32-chars!!
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/cloudresource
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── Project 2: Workflow Management System ────────────────────
+  workflow:
+    build: ./project-2-workflow/backend
+    container_name: workflow-backend
+    ports:
+      - "8082:8082"
+    environment:
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: local-dev-secret-key-minimum-32-chars!!
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── Project 3: API Gateway ────────────────────────────────────
+  api-gateway:
+    build: ./project-3-api-gateway/backend
+    container_name: apigateway-backend
+    ports:
+      - "8083:8083"
+    environment:
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: local-dev-secret-key-minimum-32-chars!!
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/apigateway
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── Project 4: Codebase Q&A ───────────────────────────────────
+  ollama:
+    image: ollama/ollama
+    container_name: bubu-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  codebase-qa:
+    build: ./project-4-codebase-qa/app
+    container_name: codebase-qa-app
+    ports:
+      - "8000:8000"
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+    depends_on:
+      - ollama
+
+volumes:
+  pgdata:
+  ollama_data:

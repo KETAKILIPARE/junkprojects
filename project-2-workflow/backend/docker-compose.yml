@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: workflow-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 5
+
+  backend:
+    build: .
+    container_name: workflow-backend
+    ports:
+      - "8082:8082"
+    environment:
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: local-dev-secret-key-minimum-32-chars!!
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
