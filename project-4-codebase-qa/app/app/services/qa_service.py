@@ -1,41 +1,70 @@
-from app.services.indexer import get_store
-from app.models.schemas import QueryResponse
-from langchain_ollama import OllamaEmbeddings, OllamaLLM
+import os
+import httpx
+from pathlib import Path
+from dotenv import load_dotenv
+from groq import Groq
+from app.models.schemas import CodeChunk, QueryResponse
+from app.services.vector_store import VectorStore
 
-_embeddings = OllamaEmbeddings(model="nomic-embed-text")
-_llm = OllamaLLM(model="llama3.2")
+load_dotenv(dotenv_path=Path(__file__).parent.parent.parent / ".env")
+
+GROQ_MODEL = "llama-3.1-8b-instant"
+
+PROMPT_TEMPLATE = """\
+You are a code assistant analyzing a Java Spring Boot codebase.
+Answer the question based on the code context below.
+Even if the context is partial, explain what you can see.
+Only say you cannot find the answer if the context has absolutely nothing relevant.
+
+CODE CONTEXT:
+{context}
+
+QUESTION: {question}
+
+ANSWER (be specific, reference the actual class and method names you see in the context):"""
 
 
 class QAService:
-    def query(self, question: str) -> QueryResponse:
-        store = get_store()
-        query_embedding = _embeddings.embed_query(question)
-        results = store.search(query_embedding, top_k=5)
 
-        if not results:
-            return QueryResponse(answer="No code has been indexed yet.", sources=[])
+    def __init__(self, vector_store: VectorStore):
+        self._store = vector_store
+        api_key = os.environ.get("GROQ_API_KEY")
+        http_client = httpx.Client(verify=False, trust_env=False)
+        self._client = Groq(api_key=api_key, http_client=http_client)
 
-        context = "\n\n".join([
-            f"File: {chunk.file_path} (lines {chunk.start_line}-{chunk.end_line})\n{chunk.content}"
-            for chunk, _ in results
-        ])
+    def query(self, question: str, top_k: int = 5) -> QueryResponse:
+        if self._store.count() == 0:
+            return QueryResponse(
+                answer="No code has been indexed yet. Please index a project folder first.",
+                sources=[]
+            )
 
-        prompt = f"""You are a code assistant. Answer the question using ONLY the provided code context.
-If the answer is not in the context, say so.
+        chunks = self._store.search(question, top_k=top_k)
 
-Context:
-{context}
+        if not chunks:
+            return QueryResponse(
+                answer="I couldn't find relevant code for this question in the indexed codebase.",
+                sources=[]
+            )
 
-Question: {question}
+        context = self._build_context(chunks)
+        prompt = PROMPT_TEMPLATE.format(context=context, question=question)
 
-Answer:"""
+        response = self._client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+        )
 
-        answer = _llm.invoke(prompt)
+        answer = response.choices[0].message.content
+        return QueryResponse(answer=answer, sources=chunks)
 
-        sources = [
-            {"file": chunk.file_path, "function": chunk.function_name,
-             "start_line": chunk.start_line, "end_line": chunk.end_line}
-            for chunk, _ in results
-        ]
-
-        return QueryResponse(answer=answer, sources=sources)
+    def _build_context(self, chunks: list[CodeChunk]) -> str:
+        parts = []
+        for chunk in chunks:
+            header = f"File: {chunk.file_path.split(chr(92))[-1]}"
+            if chunk.context_name:
+                header += f" | Function/Class: {chunk.context_name}"
+            header += f" | Lines {chunk.start_line}-{chunk.end_line}"
+            parts.append(f"{header}\n```{chunk.language}\n{chunk.content}\n```")
+        return "\n\n---\n\n".join(parts)

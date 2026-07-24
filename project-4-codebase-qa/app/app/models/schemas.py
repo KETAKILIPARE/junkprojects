@@ -1,30 +1,38 @@
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, Field
+from typing import Optional
+
+
+class CodeChunk(BaseModel):
+    chunk_id: str
+    file_path: str
+    language: str
+    start_line: int
+    end_line: int
+    content: str
+    context_name: Optional[str] = None  # function or class name if detected
 
 
 class IndexRequest(BaseModel):
-    path: str
+    folder_path: str
+
+
+class IndexResponse(BaseModel):
+    indexed_files: int
+    total_chunks: int
+    folder_path: str
 
 
 class QueryRequest(BaseModel):
     question: str
+    top_k: int = Field(default=8, ge=1, le=20)
 
 
 class QueryResponse(BaseModel):
     answer: str
-    sources: List[dict]
+    sources: list[CodeChunk]
 
 
 class StatusResponse(BaseModel):
-    indexed: bool
-    chunk_count: int
-    files: List[str]
-
-
-class CodeChunk(BaseModel):
-    file_path: str
-    function_name: Optional[str]
-    start_line: int
-    end_line: int
-    language: str
-    content: str
+    total_chunks: int
+    indexed_files: list[str]
+    is_ready: bool
